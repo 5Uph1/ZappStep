@@ -16,15 +16,27 @@ export default function AuthPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  const handleTabChange = (tab: "login" | "register") => {
+    setActiveTab(tab);
+    // Reset pesan saat ganti tab agar tidak membingungkan
+    setErrorMsg("");
+    setSuccessMsg("");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
+
+    if (password.length < 6) {
+      setErrorMsg("Password harus minimal 6 karakter.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (activeTab === "login") {
-        // ── LOGIN ──────────────────────────────────────────────
         const { error } = await supabaseClient.auth.signInWithPassword({
           email,
           password,
@@ -35,12 +47,9 @@ export default function AuthPage() {
           return;
         }
 
-        // refresh() dulu agar middleware membaca cookie session yang baru,
-        // baru kemudian push ke dashboard
         router.refresh();
         router.push("/dashboard");
       } else {
-        // ── REGISTER ───────────────────────────────────────────
         const { error } = await supabaseClient.auth.signUp({
           email,
           password,
@@ -51,13 +60,20 @@ export default function AuthPage() {
           return;
         }
 
+        // Tampilkan pesan sukses dulu, baru pindah tab setelah delay singkat
         setSuccessMsg(
-          "Registrasi berhasil! Cek email kamu untuk konfirmasi, lalu login.",
+          "Registrasi berhasil! Silakan cek email untuk verifikasi.",
         );
         setEmail("");
         setPassword("");
-        setActiveTab("register");
+        setTimeout(() => {
+          setActiveTab("login");
+          // Jangan hapus successMsg agar tetap terlihat di tab login
+        }, 1500);
       }
+    } catch (err: unknown) {
+      console.error(err);
+      setErrorMsg("Terjadi kesalahan yang tidak terduga.");
     } finally {
       setLoading(false);
     }
@@ -81,6 +97,10 @@ export default function AuthPage() {
         .button-glow {
           box-shadow: 0 4px 20px -5px rgba(0, 105, 72, 0.4);
           background: linear-gradient(135deg, #00855d 0%, #006948 100%);
+        }
+        .button-glow:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
         .material-symbols-outlined {
           font-family: 'Material Symbols Outlined';
@@ -110,6 +130,18 @@ export default function AuthPage() {
         .input-field:focus {
           background-color: #fff;
           box-shadow: 0 0 0 2px #006948;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .spinner {
+          width: 18px;
+          height: 18px;
+          border: 2px solid rgba(255,255,255,0.4);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+          display: inline-block;
         }
       `}</style>
 
@@ -252,7 +284,7 @@ export default function AuthPage() {
                 {(["login", "register"] as const).map((tab) => (
                   <button
                     key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => handleTabChange(tab)}
                     style={{
                       flex: 1,
                       padding: "8px",
@@ -290,6 +322,68 @@ export default function AuthPage() {
               >
                 {activeTab === "login" ? "Welcome Back" : "Create Account"}
               </h2>
+
+              {/* ✅ FIX 1: Error Message ditampilkan */}
+              {errorMsg && (
+                <div
+                  style={{
+                    marginBottom: "16px",
+                    padding: "12px 16px",
+                    borderRadius: "8px",
+                    backgroundColor: "#ffdad6",
+                    border: "1px solid #ffb4ab",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "8px",
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{
+                      fontSize: "18px",
+                      color: "#ba1a1a",
+                      flexShrink: 0,
+                      marginTop: "1px",
+                    }}
+                  >
+                    error
+                  </span>
+                  <p style={{ fontSize: "14px", color: "#93000a", margin: 0 }}>
+                    {errorMsg}
+                  </p>
+                </div>
+              )}
+
+              {/* ✅ FIX 1: Success Message ditampilkan */}
+              {successMsg && (
+                <div
+                  style={{
+                    marginBottom: "16px",
+                    padding: "12px 16px",
+                    borderRadius: "8px",
+                    backgroundColor: "#d1fadf",
+                    border: "1px solid #6ee7a0",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "8px",
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{
+                      fontSize: "18px",
+                      color: "#006948",
+                      flexShrink: 0,
+                      marginTop: "1px",
+                    }}
+                  >
+                    check_circle
+                  </span>
+                  <p style={{ fontSize: "14px", color: "#006948", margin: 0 }}>
+                    {successMsg}
+                  </p>
+                </div>
+              )}
 
               <form
                 onSubmit={handleSubmit}
@@ -336,6 +430,10 @@ export default function AuthPage() {
                     <input
                       type="email"
                       placeholder="name@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={loading}
                       className="input-field"
                       style={{ paddingLeft: "40px" }}
                     />
@@ -379,6 +477,10 @@ export default function AuthPage() {
                     <input
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={loading}
                       className="input-field"
                       style={{ paddingLeft: "40px", paddingRight: "48px" }}
                     />
@@ -431,16 +533,17 @@ export default function AuthPage() {
                   </div>
                 )}
 
-                {/* Submit */}
+                {/* ✅ FIX 2: Tombol disabled saat loading, ada spinner */}
                 <button
                   type="submit"
+                  disabled={loading}
                   className="button-glow"
                   style={{
                     width: "100%",
                     padding: "16px",
                     borderRadius: "9999px",
                     border: "none",
-                    cursor: "pointer",
+                    cursor: loading ? "not-allowed" : "pointer",
                     color: "#fff",
                     fontSize: "12px",
                     fontWeight: 700,
@@ -451,23 +554,38 @@ export default function AuthPage() {
                     justifyContent: "center",
                     gap: "8px",
                     transition: "transform 0.1s",
+                    opacity: loading ? 0.7 : 1,
                   }}
                   onMouseDown={(e) =>
+                    !loading &&
                     (e.currentTarget.style.transform = "scale(0.98)")
                   }
                   onMouseUp={(e) =>
                     (e.currentTarget.style.transform = "scale(1)")
                   }
                 >
-                  <span>
-                    {activeTab === "login" ? "Sign In" : "Create Account"}
-                  </span>
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: "18px" }}
-                  >
-                    arrow_forward
-                  </span>
+                  {loading ? (
+                    <>
+                      <span className="spinner" />
+                      <span>
+                        {activeTab === "login"
+                          ? "Signing In..."
+                          : "Creating Account..."}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        {activeTab === "login" ? "Sign In" : "Create Account"}
+                      </span>
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "18px" }}
+                      >
+                        arrow_forward
+                      </span>
+                    </>
+                  )}
                 </button>
               </form>
 
