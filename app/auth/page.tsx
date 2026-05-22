@@ -18,7 +18,6 @@ export default function AuthPage() {
 
   const handleTabChange = (tab: "login" | "register") => {
     setActiveTab(tab);
-    // Reset pesan saat ganti tab agar tidak membingungkan
     setErrorMsg("");
     setSuccessMsg("");
   };
@@ -37,19 +36,28 @@ export default function AuthPage() {
 
     try {
       if (activeTab === "login") {
-        const { error } = await supabaseClient.auth.signInWithPassword({
+        // 1. Login dengan email & password
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
           email,
           password,
         });
-
         if (error) {
           setErrorMsg(error.message);
           return;
         }
+        const { data: profile } = await supabaseClient
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .single();
 
-        router.refresh();
-        router.push("/dashboard");
+        if (profile?.role === "admin") {
+          router.push("/admin");
+        } else {
+          router.push("/dashboard");
+        }
       } else {
+        // Register — trigger Supabase otomatis insert ke profiles dengan role 'user'
         const { error } = await supabaseClient.auth.signUp({
           email,
           password,
@@ -60,7 +68,6 @@ export default function AuthPage() {
           return;
         }
 
-        // Tampilkan pesan sukses dulu, baru pindah tab setelah delay singkat
         setSuccessMsg(
           "Registrasi berhasil! Silakan cek email untuk verifikasi.",
         );
@@ -68,7 +75,6 @@ export default function AuthPage() {
         setPassword("");
         setTimeout(() => {
           setActiveTab("login");
-          // Jangan hapus successMsg agar tetap terlihat di tab login
         }, 1500);
       }
     } catch (err: unknown) {
@@ -84,7 +90,6 @@ export default function AuthPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
-
         .glass-panel {
           background: rgba(255, 255, 255, 0.7);
           backdrop-filter: blur(20px);
@@ -98,10 +103,7 @@ export default function AuthPage() {
           box-shadow: 0 4px 20px -5px rgba(0, 105, 72, 0.4);
           background: linear-gradient(135deg, #00855d 0%, #006948 100%);
         }
-        .button-glow:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
+        .button-glow:disabled { opacity: 0.6; cursor: not-allowed; }
         .material-symbols-outlined {
           font-family: 'Material Symbols Outlined';
           font-weight: normal;
@@ -127,16 +129,10 @@ export default function AuthPage() {
           color: #171d19;
           transition: all 0.2s;
         }
-        .input-field:focus {
-          background-color: #fff;
-          box-shadow: 0 0 0 2px #006948;
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
+        .input-field:focus { background-color: #fff; box-shadow: 0 0 0 2px #006948; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .spinner {
-          width: 18px;
-          height: 18px;
+          width: 18px; height: 18px;
           border: 2px solid rgba(255,255,255,0.4);
           border-top-color: #fff;
           border-radius: 50%;
@@ -183,7 +179,7 @@ export default function AuthPage() {
               color: "#0f172a",
             }}
           >
-            QuickShop
+            ZeepStep
           </div>
           <span
             className="material-symbols-outlined"
@@ -323,7 +319,7 @@ export default function AuthPage() {
                 {activeTab === "login" ? "Welcome Back" : "Create Account"}
               </h2>
 
-              {/* ✅ FIX 1: Error Message ditampilkan */}
+              {/* Error Message */}
               {errorMsg && (
                 <div
                   style={{
@@ -354,7 +350,7 @@ export default function AuthPage() {
                 </div>
               )}
 
-              {/* ✅ FIX 1: Success Message ditampilkan */}
+              {/* Success Message */}
               {successMsg && (
                 <div
                   style={{
@@ -508,36 +504,11 @@ export default function AuthPage() {
                   </div>
                 </div>
 
-                {/* Forgot Password */}
-                {activeTab === "login" && (
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <Link
-                      href="#"
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        letterSpacing: "0.1em",
-                        textTransform: "uppercase",
-                        color: "#006948",
-                        textDecoration: "none",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.textDecoration = "underline")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.textDecoration = "none")
-                      }
-                    >
-                      Forgot Password?
-                    </Link>
-                  </div>
-                )}
-
-                {/* ✅ FIX 2: Tombol disabled saat loading, ada spinner */}
+                {/* Submit */}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="button-glow"
+                  className="button-glow mt-5"
                   style={{
                     width: "100%",
                     padding: "16px",
@@ -588,114 +559,6 @@ export default function AuthPage() {
                   )}
                 </button>
               </form>
-
-              {/* Divider */}
-              <div
-                style={{
-                  margin: "24px 0",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "16px",
-                }}
-              >
-                <div
-                  style={{
-                    height: "1px",
-                    flexGrow: 1,
-                    backgroundColor: "#bccac0",
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: 700,
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    color: "#6d7a72",
-                  }}
-                >
-                  OR CONTINUE WITH
-                </span>
-                <div
-                  style={{
-                    height: "1px",
-                    flexGrow: 1,
-                    backgroundColor: "#bccac0",
-                  }}
-                />
-              </div>
-
-              {/* Social */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "16px",
-                }}
-              >
-                {[
-                  {
-                    label: "GOOGLE",
-                    icon: (
-                      <img
-                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCul-Os36Uh9QNvKRDYCnsAw79OJvDU2vdA7j8w_Ym3NEd1hWAYp1FT-Pg_OAD3_jH-Gv0PRbuKVNqEF5qFmW3fsQSWYCU1cgjbQ3aMXTZY4F0zei2lZgvaFkuR7t4DJxbEplrCrXiE8kbBen09QeMRMxACYVSB11LAbrv-6Ro0ibWDsrrrk-Ici9OL9oMcvhfgWjyiMU1KJLK7PBl8PcNhUY3Iw3ime8w-x9-ZK7y_Un65h0hQKFJpskOmPg1N9M8_zAeEEzIOKRZv"
-                        alt="Google"
-                        style={{ width: "20px", height: "20px" }}
-                      />
-                    ),
-                  },
-                  {
-                    label: "FACEBOOK",
-                    icon: (
-                      <span
-                        className="material-symbols-outlined"
-                        style={{
-                          fontSize: "20px",
-                          color: "#1877F2",
-                          fontVariationSettings: "'FILL' 1",
-                        }}
-                      >
-                        social_leaderboard
-                      </span>
-                    ),
-                  },
-                ].map(({ label, icon }) => (
-                  <button
-                    key={label}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      padding: "12px 16px",
-                      borderRadius: "12px",
-                      border: "1px solid #bccac0",
-                      background: "transparent",
-                      cursor: "pointer",
-                      transition: "background 0.2s",
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor = "#fff")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.backgroundColor = "transparent")
-                    }
-                  >
-                    {icon}
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        letterSpacing: "0.1em",
-                        textTransform: "uppercase",
-                        color: "#171d19",
-                      }}
-                    >
-                      {label}
-                    </span>
-                  </button>
-                ))}
-              </div>
             </div>
           </section>
         </main>

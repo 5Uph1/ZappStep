@@ -3,12 +3,7 @@ import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(request: NextRequest) {
-  // Buat response yang bisa kita mutasi cookienya
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+  let response = NextResponse.next({ request: { headers: request.headers } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,23 +14,16 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(key)?.value;
         },
         set(key, value, options) {
-          // Set di request agar middleware bisa baca session yang baru
           request.cookies.set({ name: key, value, ...options });
-          // Buat ulang response dengan headers request yang sudah diupdate
           response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
+            request: { headers: request.headers },
           });
-          // Set juga di response agar browser menyimpan cookie
           response.cookies.set({ name: key, value, ...options });
         },
         remove(key, options) {
           request.cookies.set({ name: key, value: "", ...options });
           response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
+            request: { headers: request.headers },
           });
           response.cookies.set({ name: key, value: "", ...options });
         },
@@ -43,30 +31,49 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  // WAJIB: getUser() akan refresh session token jika expired
-  // dan memperbarui cookie secara otomatis lewat setter di atas
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
+  const fromPayment = request.nextUrl.searchParams.get("from") === "payment";
+
   const isAuthPage = path.startsWith("/auth");
-  const isDashboard = path.startsWith("/dashboard");
+  const isProtected =
+    path.startsWith("/dashboard") || path.startsWith("/admin");
 
   // Belum login → redirect ke /auth
-  if (!user && isDashboard) {
+  if (!user && isProtected && !fromPayment) {
     return NextResponse.redirect(new URL("/auth", request.url));
   }
 
-  // Sudah login → redirect ke /dashboard
+  // Sudah login → tidak perlu ke /auth
   if (user && isAuthPage) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Kembalikan response dengan cookie yang sudah disync
+  // COMMENT dulu pengecekan role di middleware
+  // Biarkan admin bisa akses /admin, nanti dicek di halaman admin saja
+  // if (user && path.startsWith("/admin")) {
+  //   const { data: profile } = await supabase
+  //     .from("profiles")
+  //     .select("role")
+  //     .eq("id", user.id)
+  //     .single();
+  //   if (profile?.role !== "admin") {
+  //     return NextResponse.redirect(new URL("/dashboard", request.url));
+  //   }
+  // }
+
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/auth"],
+  matcher: [
+    "/dashboard/:path*",
+    "/dashboard",
+    "/admin/:path*",
+    "/admin",
+    "/auth",
+  ],
 };
